@@ -1,0 +1,69 @@
+name: SQL Autograding
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  grade:
+
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: mysql
+
+        ports:
+          - 3306:3306
+
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+
+      # Step 1: Checkout student repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Step 2: Install MySQL client
+      - name: Install MySQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      # Step 3: Wait for MySQL
+      - name: Wait for MySQL
+        run: |
+          for i in {1..30}; do
+            mysqladmin ping \
+              -h 127.0.0.1 \
+              -uroot \
+              -proot \
+              --silent && exit 0
+            sleep 2
+          done
+
+          exit 1
+
+      # Step 4: Execute student's SQL
+      - name: Execute Student SQL
+        run: |
+          mysql \
+            -h 127.0.0.1 \
+            -uroot \
+            -proot \
+            < solution.sql
+
+      # Step 5: Run test cases
+      - name: Run Autograding Tests
+        run: |
+          chmod +x tests/test.sh
+          ./tests/test.sh
