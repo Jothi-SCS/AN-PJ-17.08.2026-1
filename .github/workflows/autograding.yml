@@ -1,4 +1,4 @@
-name: SQL Autograding
+name: CollegeDB SQL Autograding
 
 on:
   push:
@@ -7,63 +7,120 @@ on:
 
 jobs:
   grade:
-
     runs-on: ubuntu-latest
 
     services:
       mysql:
         image: mysql:8.0
-
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: mysql
-
         ports:
           - 3306:3306
-
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=10
+          --health-retries=20
 
     steps:
 
-      # Step 1: Checkout student repository
+      # 1. Download repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Step 2: Install MySQL client
+      # 2. Install MySQL client
       - name: Install MySQL Client
         run: |
           sudo apt-get update
           sudo apt-get install -y mysql-client
 
-      # Step 3: Wait for MySQL
+      # 3. Check student file
+      - name: Check Solution File
+        run: |
+          echo "Checking solution.sql..."
+          ls -la
+          test -f solution.sql
+
+      # 4. Wait until MySQL is ready
       - name: Wait for MySQL
         run: |
-          for i in {1..30}; do
-            mysqladmin ping \
+          echo "Waiting for MySQL..."
+
+          for i in {1..30}
+          do
+            if mysqladmin ping \
               -h 127.0.0.1 \
-              -uroot \
+              -P 3306 \
+              -u root \
               -proot \
-              --silent && exit 0
+              --protocol=tcp \
+              --silent
+            then
+              echo "MySQL is ready!"
+              break
+            fi
+
+            echo "MySQL not ready... waiting..."
             sleep 2
           done
 
-          exit 1
+          mysqladmin ping \
+            -h 127.0.0.1 \
+            -P 3306 \
+            -u root \
+            -proot \
+            --protocol=tcp
 
-      # Step 4: Execute student's SQL
+      # 5. Execute student SQL
       - name: Execute Student SQL
         run: |
+          echo "======================================"
+          echo "Executing solution.sql"
+          echo "======================================"
+
           mysql \
             -h 127.0.0.1 \
-            -uroot \
+            -P 3306 \
+            -u root \
             -proot \
+            --protocol=tcp \
+            --show-warnings \
             < solution.sql
 
-      # Step 5: Run test cases
+          echo "SQL execution completed successfully."
+
+      # 6. Display created database and table
+      - name: Verify Database
+        run: |
+          echo "======================================"
+          echo "Checking CollegeDB"
+          echo "======================================"
+
+          mysql \
+            -h 127.0.0.1 \
+            -P 3306 \
+            -u root \
+            -proot \
+            --protocol=tcp \
+            -e "SHOW DATABASES;"
+
+          echo "Checking Department table..."
+
+          mysql \
+            -h 127.0.0.1 \
+            -P 3306 \
+            -u root \
+            -proot \
+            --protocol=tcp \
+            -e "USE CollegeDB; SHOW TABLES;"
+
+      # 7. Run test cases
       - name: Run Autograding Tests
         run: |
+          echo "======================================"
+          echo "Running Test Cases"
+          echo "======================================"
+
           chmod +x tests/test.sh
+
           ./tests/test.sh
